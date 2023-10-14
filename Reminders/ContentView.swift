@@ -180,11 +180,20 @@ struct ContentView: View {
                             
                             
                             Button(action: {
-                                // Save the reminder
-                                let newReminder = Reminder(title: name, active: true) // Customize with user input
-                                reminderData.reminders.append(newReminder)
+                                // Check if we are editing an existing reminder
+                                if let reminder = reminderToEdit {
+                                    // Find the reminder in the array and update it
+                                    if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                                        reminderData.reminders[index].title = name
+                                        // Update other fields as necessary
+                                    }
+                                } else {
+                                    // Save the reminder as a new entry
+                                    let newReminder = Reminder(title: name, active: true) // Customize with user input
+                                    reminderData.reminders.append(newReminder)
+                                }
                                 reminderData.saveReminders()
-                                
+
                                 // Dismiss the modal
                                 self.isModalPresented.toggle()
                             }) {
@@ -194,6 +203,7 @@ struct ContentView: View {
                                     .background(Color.blue)
                                     .cornerRadius(10)
                             }
+
                         }
                         .padding()
                     }
