@@ -56,6 +56,11 @@ struct ContentView: View {
                     ForEach(reminderData.reminders) { reminder in
                         HStack {
                             Text(reminder.title)
+                                .contentShape(Rectangle()) // Ensure tap only recognized on text
+                                .onTapGesture {
+                                    selectedReminder = reminder
+                                    isModalPresented.toggle()
+                                }
                             Spacer() // Add spacing to push the toggle to the right
                             Toggle("", isOn: Binding(
                                 get: { reminder.active },
@@ -67,10 +72,7 @@ struct ContentView: View {
                                 }
                             ))
                             .labelsHidden() // Hide the label of the toggle
-                        }
-                        .onTapGesture {
-                            selectedReminder = reminder
-                            isModalPresented.toggle()
+                            .contentShape(Rectangle()) // Ensure tap only recognized on toggle
                         }
                     }
                     .onDelete(perform: reminderData.deleteReminder) // Adding the swipe to delete functionality
