@@ -1,8 +1,16 @@
 import SwiftUI
 
+
 struct Reminder: Identifiable, Codable { // Make Reminder Codable
     var id = UUID()
     var title: String
+    var startDate: Date
+    var startTime: Date
+    var endDate: Date?
+    var endTime: Date?
+    var repeatEvery: String
+    var repeatUnit: String
+    var repeatDays: [String]
     var active: Bool
 }
 
@@ -116,7 +124,6 @@ struct ModalView: View {
     @State private var startTime = Date()
     @State private var endDate = Date()
     @State private var endTime = Date()
-    @State private var isRepeatOn = false
     @State private var selectedRepeatOption = "hour"
     @State private var isRepeatDaysOn = false
     @State private var selectedRepeatDays: [String] = []
@@ -197,18 +204,34 @@ struct ModalView: View {
                             }.frame(minHeight: 380)
                         }
                         
-                        
+           
                         Button(action: {
                             // Check if we are editing an existing reminder
                             if let reminder = reminderToEdit {
                                 // Find the reminder in the array and update it
                                 if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
                                     reminderData.reminders[index].title = name
-                                    // Update other fields as necessary
+                                    reminderData.reminders[index].startDate = startDate
+                                    reminderData.reminders[index].startTime = startTime
+                                    reminderData.reminders[index].endDate = isEndDateAndTimeEnabled ? endDate : nil
+                                    reminderData.reminders[index].endTime = isEndDateAndTimeEnabled ? endTime : nil
+                                    reminderData.reminders[index].repeatEvery =  repeatEvery
+                                    reminderData.reminders[index].repeatUnit = selectedRepeatOption
+                                    reminderData.reminders[index].repeatDays = isRepeatDaysOn ? selectedRepeatDays : abbreviatedDaysOfWeek
                                 }
                             } else {
                                 // Save the reminder as a new entry
-                                let newReminder = Reminder(title: name, active: true) // Customize with user input
+                                let newReminder = Reminder(
+                                    title: name,
+                                    startDate: startDate,
+                                    startTime: startTime,
+                                    endDate: isEndDateAndTimeEnabled ? endDate : nil,
+                                    endTime: isEndDateAndTimeEnabled ? endTime : nil,
+                                    repeatEvery:  repeatEvery,
+                                    repeatUnit: selectedRepeatOption,
+                                    repeatDays: isRepeatDaysOn ? selectedRepeatDays : abbreviatedDaysOfWeek,
+                                    active: true
+                                ) // Customize with user input
                                 reminderData.reminders.append(newReminder)
                             }
                             reminderData.saveReminders()
@@ -240,7 +263,15 @@ struct ModalView: View {
                 // Load reminder details if we are editing an existing reminder
                 if let reminder = reminderToEdit {
                     self.name = reminder.title
-                    //TODO: Update other fields
+                    self.startDate = reminder.startDate
+                    self.startTime = reminder.startTime
+                    self.endDate = reminder.endDate ?? Date()
+                    self.endTime = reminder.endTime ?? Date()
+                    self.repeatEvery = reminder.repeatEvery
+                    self.selectedRepeatOption = reminder.repeatUnit
+                    self.selectedRepeatDays = reminder.repeatDays
+                    self.isRepeatDaysOn = reminder.repeatDays.count > 0
+                    self.isEndDateAndTimeEnabled = reminder.endDate != nil ? true : false
                 }
             }
         }
