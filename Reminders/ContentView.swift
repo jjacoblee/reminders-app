@@ -25,6 +25,12 @@ class ReminderData: ObservableObject {
             reminders = decodedReminders
         }
     }
+    
+    func deleteReminder(at offsets: IndexSet) {
+        reminders.remove(atOffsets: offsets)
+        saveReminders()
+    }
+    
 }
 
 struct ContentView: View {
@@ -32,32 +38,36 @@ struct ContentView: View {
     @State private var selectedReminder: Reminder? = nil
 
     @ObservedObject private var reminderData = ReminderData() // Use the ReminderData object
-    
+
     
     var body: some View {
         NavigationView {
             VStack {
                 
-                List(reminderData.reminders) { reminder in
-                    HStack {
-                        Text(reminder.title)
-                        Spacer() // Add spacing to push the toggle to the right
-                        Toggle("", isOn: Binding(
-                            get: { reminder.active },
-                            set: { newValue in
-                                // Update the active status of the reminder
-                                if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
-                                    reminderData.reminders[index].active = newValue
+                List {
+                    ForEach(reminderData.reminders) { reminder in
+                        HStack {
+                            Text(reminder.title)
+                            Spacer() // Add spacing to push the toggle to the right
+                            Toggle("", isOn: Binding(
+                                get: { reminder.active },
+                                set: { newValue in
+                                    // Update the active status of the reminder
+                                    if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                                        reminderData.reminders[index].active = newValue
+                                    }
                                 }
-                            }
-                        ))
-                        .labelsHidden() // Hide the label of the toggle
+                            ))
+                            .labelsHidden() // Hide the label of the toggle
+                        }
+                        .onTapGesture {
+                            selectedReminder = reminder
+                            isModalPresented.toggle()
+                        }
                     }
-                    .onTapGesture {
-                        selectedReminder = reminder
-                        isModalPresented.toggle()
-                    }
+                    .onDelete(perform: reminderData.deleteReminder) // Adding the swipe to delete functionality
                 }
+
                 
                 
                 .navigationBarTitle("Reminders")
@@ -114,6 +124,7 @@ struct ContentView: View {
         
         let repeatOptions = ["hour", "day", "week", "month", "year"]
         let abbreviatedDaysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        
         
         var body: some View {
             
