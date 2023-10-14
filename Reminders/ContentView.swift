@@ -29,6 +29,8 @@ class ReminderData: ObservableObject {
 
 struct ContentView: View {
     @State private var isModalPresented = false
+    @State private var selectedReminder: Reminder? = nil
+
     @ObservedObject private var reminderData = ReminderData() // Use the ReminderData object
     
     
@@ -51,13 +53,20 @@ struct ContentView: View {
                         ))
                         .labelsHidden() // Hide the label of the toggle
                     }
+                    .onTapGesture {
+                        selectedReminder = reminder
+                        isModalPresented.toggle()
+                    }
                 }
                 
                 
                 .navigationBarTitle("Reminders")
-                .sheet(isPresented: $isModalPresented) {
-                    ModalView(isModalPresented: self.$isModalPresented, reminderData: self.reminderData)
+                .sheet(isPresented: $isModalPresented, onDismiss: {
+                    selectedReminder = nil // Reset the selected reminder when the modal is dismissed
+                }) {
+                    ModalView(isModalPresented: self.$isModalPresented, reminderData: self.reminderData, reminderToEdit: self.selectedReminder)
                 }
+
                 
                 Button(action: {
                     // Show the modal when the button is tapped
@@ -88,6 +97,8 @@ struct ContentView: View {
         @Binding var isModalPresented: Bool
         @ObservedObject var reminderData: ReminderData // Use the ReminderData object
         
+        var reminderToEdit: Reminder?
+        
         
         // Reminder fields
         @State private var name = ""
@@ -107,6 +118,7 @@ struct ContentView: View {
         var body: some View {
             
             NavigationView {
+                
                 ScrollView{
                     VStack {
                         VStack(spacing: 20) {
@@ -195,6 +207,13 @@ struct ContentView: View {
                         .font(.headline)
                 })
                 .navigationBarTitle("Event Details")
+                .onAppear {
+                    // Load reminder details if we are editing an existing reminder
+                    if let reminder = reminderToEdit {
+                        self.name = reminder.title
+                        //TODO: Update other fields
+                    }
+                }
             }
         }
     }
