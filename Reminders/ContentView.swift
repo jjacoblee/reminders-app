@@ -1,4 +1,6 @@
 import SwiftUI
+import UserNotifications
+
 
 struct TimeConstants {
     static let secondsInAMinute: TimeInterval = 60
@@ -90,12 +92,6 @@ class ReminderData: ObservableObject {
         loadReminders()
     }
     
-    func saveReminders() {
-        if let encoded = try? JSONEncoder().encode(reminders) {
-            UserDefaults.standard.set(encoded, forKey: "reminders")
-        }
-    }
-    
     func loadReminders() {
         if let remindersData = UserDefaults.standard.data(forKey: "reminders"),
            let decodedReminders = try? JSONDecoder().decode([Reminder].self, from: remindersData) {
@@ -107,6 +103,50 @@ class ReminderData: ObservableObject {
         reminders.remove(atOffsets: offsets)
         saveReminders()
     }
+    
+    func saveReminders() {
+        let center = UNUserNotificationCenter.current()
+        
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                self.requestNotificationPermission(completion: {
+                    // Continue setting the reminder after permission is requested
+                    self.completeReminderSave()
+                })
+            case .authorized, .provisional:
+                // Permission was already granted. Continue setting the reminder.
+                self.completeReminderSave()
+            default:
+                // Permission denied or restricted. Handle accordingly.
+                print("Notification permission denied or restricted.")
+            }
+        }
+    }
+
+    func requestNotificationPermission(completion: @escaping () -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if granted {
+                print("Notification permission granted!")
+                DispatchQueue.main.async {
+                    completion()
+                }
+            } else {
+                print("Notification permission denied.")
+                if let error = error {
+                    print("Error: \(error)")
+                }
+            }
+        }
+    }
+
+    func completeReminderSave() {
+        if let encoded = try? JSONEncoder().encode(reminders) {
+            UserDefaults.standard.set(encoded, forKey: "reminders")
+        }
+    }
+
     
     func startCountdowns(for reminder: Reminder? = nil) {
         let calendar = Calendar.current
@@ -142,10 +182,12 @@ class ReminderData: ObservableObject {
                 if let index = self.reminders.firstIndex(where: { $0.id == reminder.id }) {
                     // Reduce the countdown
                     var updatedReminder = self.reminders[index]
-                    updatedReminder.countdown -= 1
+                    updatedReminder.countdown -= 1.0
 
                     if updatedReminder.countdown <= 0 {
+                        self.scheduleNotification(for: reminder)
                         updatedReminder.countdown = repeatInSeconds
+
                     }
 
                     self.reminders[index] = updatedReminder
@@ -167,6 +209,27 @@ class ReminderData: ObservableObject {
         }
         timers.removeAll()
     }
+    
+    func scheduleNotification(for reminder: Reminder) {
+        let content = UNMutableNotificationContent()
+        content.title = "Reminder Alert!"
+        content.body = reminder.title
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let request = UNNotificationRequest(identifier: reminder.id.uuidString, content: content, trigger: trigger)
+
+        let center = UNUserNotificationCenter.current()
+        center.add(request) { error in
+            if let error = error {
+                print("Error scheduling notification: \(error)")
+            } else {
+                print("Notification scheduled!")
+            }
+        }
+    }
+
     
     private func combineDateAndTime(date: Date, time: Date) -> Date {
         let calendar = Calendar.current
@@ -201,11 +264,19 @@ extension TimeInterval {
 
 
 struct ContentView: View {
+    
     @State private var isModalPresented = false
     @State private var selectedReminder: Reminder? = nil
 
     @ObservedObject private var reminderData = ReminderData() // Use the ReminderData object
 
+    init(isModalPresented: Bool = false, selectedReminder: Reminder? = nil, reminderData: ReminderData = ReminderData()) {
+        self.isModalPresented = isModalPresented
+        self.selectedReminder = selectedReminder
+        self.reminderData = reminderData
+        
+       
+    }
     
     var body: some View {
         NavigationView {
