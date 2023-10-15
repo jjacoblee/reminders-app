@@ -74,11 +74,12 @@ class ReminderData: ObservableObject {
         saveReminders()
     }
     
-    func startCountdowns() {
+    func startCountdowns(for reminder: Reminder? = nil) {
         let calendar = Calendar.current
 
-        for index in reminders.indices where reminders[index].active {
-            let reminder = reminders[index]
+        let remindersToProcess = reminder != nil ? [reminder!] : reminders
+
+        for reminder in remindersToProcess where reminder.active && timers[reminder.id] == nil {
             let dayOfWeek = calendar.component(.weekday, from: Date()) // 1 = Sunday, 7 = Saturday
 
             if !reminder.repeatDays.isEmpty && !reminder.repeatDays.contains(where: { $0.rawValue == dayOfWeek }) {
@@ -97,27 +98,33 @@ class ReminderData: ObservableObject {
             let repeatInSeconds = convertRepeatToSeconds(repeatEvery: reminder.repeatEvery, repeatUnit: reminder.repeatUnit)
 
             // Initialize the countdown value when starting the timer
-            reminders[index].countdown = repeatInSeconds
+            if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
+                reminders[index].countdown = repeatInSeconds
+            }
 
-            timers[reminder.id]?.invalidate()
-            timers[reminder.id] = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                // Reduce the countdown
-                var updatedReminder = self.reminders[index]
-                updatedReminder.countdown -= 1
+            timers[reminder.id] = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
 
-                if updatedReminder.countdown <= 0 {
-                    updatedReminder.countdown = repeatInSeconds
-                }
+                if let index = self.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                    // Reduce the countdown
+                    var updatedReminder = self.reminders[index]
+                    updatedReminder.countdown -= 1
 
-                self.reminders[index] = updatedReminder
+                    if updatedReminder.countdown <= 0 {
+                        updatedReminder.countdown = repeatInSeconds
+                    }
 
-                if let end = reminder.endTime, Date() > end {
-                    self.timers[reminder.id]?.invalidate()
-                    self.timers.removeValue(forKey: reminder.id)
+                    self.reminders[index] = updatedReminder
+
+                    if let end = reminder.endTime, Date() > end {
+                        self.timers[reminder.id]?.invalidate()
+                        self.timers.removeValue(forKey: reminder.id)
+                    }
                 }
             }
         }
     }
+
 
     
     func stopCountdowns() {
@@ -360,9 +367,10 @@ struct ModalView: View {
                                     active: true
                                 ) // Customize with user input
                                 reminderData.reminders.append(newReminder)
+                                reminderData.startCountdowns(for: newReminder )
                             }
                             reminderData.saveReminders()
-                            reminderData.startCountdowns()
+                            
 
                             // Dismiss the modal
                             self.isModalPresented.toggle()
