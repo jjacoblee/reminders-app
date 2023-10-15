@@ -1,5 +1,12 @@
 import SwiftUI
 
+struct TimeConstants {
+    static let secondsInAMinute: TimeInterval = 60
+    static let secondsInAnHour: TimeInterval = 60 * secondsInAMinute
+    static let secondsInADay: TimeInterval = 24 * secondsInAnHour
+    static let secondsInAWeek: TimeInterval = 7 * secondsInADay
+}
+
 enum DayOfWeek: Int, CaseIterable, Identifiable, Codable {
     case Sun = 1, Mon, Tue, Wed, Thu, Fri, Sat
 
@@ -49,13 +56,13 @@ enum RepeatUnit: String, CaseIterable, Identifiable, Codable {
         case .sec:
             return 1
         case .min:
-            return 60
+            return TimeConstants.secondsInAMinute
         case .hour:
-            return 3600
+            return TimeConstants.secondsInAnHour
         case .day:
-            return 86400 // 24 * 3600
+            return TimeConstants.secondsInADay
         case .week:
-            return 604800 // 7 * 24 * 3600
+            return TimeConstants.secondsInAWeek
         }
     }
     
@@ -176,12 +183,22 @@ class ReminderData: ObservableObject {
 
 extension TimeInterval {
     func formattedCountdown() -> String {
-        let hours = Int(self) / 3600
+        let weeks = Int(self) / (3600 * 24 * 7)
+        let days = (Int(self) % (3600 * 24 * 7)) / (3600 * 24)
+        let hours = (Int(self) % (3600 * 24)) / 3600
         let minutes = (Int(self) % 3600) / 60
         let seconds = Int(self) % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        
+        if weeks > 0 {
+            return "\(weeks)w \(days)d \(hours)h \(minutes)m \(seconds)s"
+        } else if days > 0 {
+            return "\(days)d \(hours)h \(minutes)m \(seconds)s"
+        } else {
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        }
     }
 }
+
 
 struct ContentView: View {
     @State private var isModalPresented = false
