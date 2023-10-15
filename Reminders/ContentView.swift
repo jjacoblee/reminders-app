@@ -34,13 +34,40 @@ enum DayOfWeek: Int, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum RepeatUnit: String, CaseIterable, Identifiable, Codable {
+    case sec = "sec"
+    case min = "min"
+    case hour = "hour"
+    case day = "day"
+    case week = "week"
+    
+    var id: String { self.rawValue }
+    
+    // If you want to convert the unit to seconds for calculations
+    var seconds: TimeInterval {
+        switch self {
+        case .sec:
+            return 1
+        case .min:
+            return 60
+        case .hour:
+            return 3600
+        case .day:
+            return 86400 // 24 * 3600
+        case .week:
+            return 604800 // 7 * 24 * 3600
+        }
+    }
+    
+}
+
 struct Reminder: Identifiable, Codable { // Make Reminder Codable
     var id = UUID()
     var title: String
     var startTime: Date
     var endTime: Date?
     var repeatEvery: String
-    var repeatUnit: String
+    var repeatUnit: RepeatUnit
     var repeatDays: [DayOfWeek]
     var active: Bool
     
@@ -140,20 +167,9 @@ class ReminderData: ObservableObject {
         return calendar.date(bySettingHour: timeComponents.hour!, minute: timeComponents.minute!, second: timeComponents.second!, of: date)!
     }
     
-    private func convertRepeatToSeconds(repeatEvery: String, repeatUnit: String) -> TimeInterval {
+    private func convertRepeatToSeconds(repeatEvery: String, repeatUnit: RepeatUnit) -> TimeInterval {
         guard let value = Int(repeatEvery) else { return 0 }
-        switch repeatUnit {
-        case "sec":
-            return TimeInterval(value)
-        case "min":
-            return TimeInterval(value * 60)
-        case "hour":
-            return TimeInterval(value * 3600)
-        case "day":
-            return TimeInterval(value * 3600 * 24)
-        default:
-            return 0
-        }
+        return TimeInterval(value) * repeatUnit.seconds
     }
     
 }
@@ -265,13 +281,13 @@ struct ModalView: View {
     @State private var name = "New Event"
     @State private var startTime = Date()
     @State private var endTime = Date()
-    @State private var selectedRepeatOption = "min"
+    @State private var selectedRepeatOption:RepeatUnit = .hour
     @State private var isRepeatDaysOn = false
     @State private var selectedRepeatDays: [DayOfWeek] = []
     @State private var isEndTimeEnabled = false
     @State private var repeatEvery = "1"
     
-    let repeatOptions = ["sec", "min", "hour", "day", "week"]
+    let repeatOptions = RepeatUnit.allCases
     let abbreviatedDaysOfWeek = DayOfWeek.allCases
     
     
@@ -309,7 +325,7 @@ struct ModalView: View {
                             
                             Picker("Unit", selection: $selectedRepeatOption) {
                                 ForEach(repeatOptions, id: \.self) { option in
-                                    Text(option)
+                                    Text(option.rawValue)
                                 }
                             }
                             .pickerStyle(SegmentedPickerStyle())
