@@ -399,12 +399,15 @@ struct ModalView: View {
                         Toggle("End Time", isOn: $isEndTimeEnabled)
                         if isEndTimeEnabled {
                             DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                                .onChange(of: endTime, initial: false) { oldValue, newValue in
+                                    if newValue <= startTime {
+                                        // Set endTime to a value after startTime, e.g., 1 minute after
+                                        endTime = startTime.addingTimeInterval(60)
+                                    }
+                                }
+
                         }
 
-                        
-                        if isEndTimeEnabled {
-                            DatePicker("End Time", selection: $endTime, in: Date()..., displayedComponents: .hourAndMinute)
-                        }
                         
                         // Repeat Cadence
                         VStack(spacing: 10) {
