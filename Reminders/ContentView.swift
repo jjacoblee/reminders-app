@@ -400,17 +400,22 @@ struct ModalView: View {
                         if isEndTimeEnabled {
                             DatePicker("End Time", selection: $endTime, in: Date()..., displayedComponents: .hourAndMinute)
                         }
+                        
                         // Repeat Cadence
-                        HStack {
-                            Text("Repeat Every")
-                                .font(.body)
-                                .foregroundColor(.primary)
-                            
-                            TextField("", text: $repeatEvery)
-                                .keyboardType(.numberPad)
-                                .frame(width: 80)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                            
+                        VStack(spacing: 10) {
+                            HStack {
+                                Text("Repeat Every")
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                
+                                TextField("", text: $repeatEvery)
+                                    .keyboardType(.numberPad)
+                                    .frame(width: 80)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                
+                                Spacer()  // Pushes the views to the left side of the screen
+                            }
+
                             Picker("Unit", selection: $selectedRepeatOption) {
                                 ForEach(repeatOptions, id: \.self) { option in
                                     Text(option.rawValue)
