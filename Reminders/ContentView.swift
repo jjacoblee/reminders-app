@@ -393,10 +393,14 @@ struct ModalView: View {
                         
                         
                         // Start Date and Time
-                        DatePicker("Start Time", selection: $startTime, in: Date()..., displayedComponents: .hourAndMinute)
-                        
+                        DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+
                         // End Date and Time
                         Toggle("End Time", isOn: $isEndTimeEnabled)
+                        if isEndTimeEnabled {
+                            DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                        }
+
                         
                         if isEndTimeEnabled {
                             DatePicker("End Time", selection: $endTime, in: Date()..., displayedComponents: .hourAndMinute)
