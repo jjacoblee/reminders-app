@@ -1,5 +1,7 @@
 import SwiftUI
 import UserNotifications
+import os
+
 
 
 struct TimeConstants {
@@ -223,6 +225,14 @@ class ReminderData: ObservableObject {
         content.title = "Reminder Alert!"
         content.body = reminder.title
         content.sound = .default
+        content.userInfo = ["reminderID": reminder.id.uuidString]
+        
+        // Add a custom action to the notification
+        let viewAction = UNNotificationAction(identifier: "VIEW_REMINDER", title: "View Reminder", options: .foreground)
+        let category = UNNotificationCategory(identifier: "REMINDER_CATEGORY", actions: [viewAction], intentIdentifiers: [], options: [])
+        content.categoryIdentifier = "REMINDER_CATEGORY"
+        
+        UNUserNotificationCenter.current().setNotificationCategories([category])
         
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         
@@ -274,10 +284,15 @@ extension TimeInterval {
 // ReminderView
 struct ReminderView: View {
     @Binding var selectedReminder: Reminder?
-    @Binding var isModalPresented: Bool  // Add this line
+    @Binding var isModalPresented: Bool
+    @Binding var expandedReminderID: UUID?
+    
     @ObservedObject var reminderData: ReminderData
-    var reminder: Reminder
+    
     @State private var areTasksVisible = false
+    
+    var reminder: Reminder
+    
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -336,15 +351,28 @@ struct ReminderView: View {
                 }
             }
         }
+        .onAppear{
+            // Log expandedReminderID
+            os_log("onAppear ReminderView")
+            print("expandedReminderID in ReminderView:", expandedReminderID ?? "nil")
+            
+            if reminder.id == expandedReminderID {
+                areTasksVisible = true
+            }
+        }
+        
     }
 }
 
 
 
 struct ContentView: View {
+    @EnvironmentObject var appState: AppState
     
     @State private var isModalPresented = false
     @State private var selectedReminder: Reminder? = nil
+    @State private var expandedReminderID: UUID?
+    
     
     @ObservedObject private var reminderData = ReminderData() // Use the ReminderData object
     
@@ -352,8 +380,6 @@ struct ContentView: View {
         self.isModalPresented = isModalPresented
         self.selectedReminder = selectedReminder
         self.reminderData = reminderData
-        
-        
     }
     
     var body: some View {
@@ -363,10 +389,13 @@ struct ContentView: View {
                 List {
                     ForEach(reminderData.reminders) { reminder in
                         ReminderView(selectedReminder: self.$selectedReminder,
-                                     isModalPresented: self.$isModalPresented,  // Pass the Binding to ReminderView
+                                     isModalPresented: self.$isModalPresented,
+                                     expandedReminderID: self.$expandedReminderID,
                                      reminderData: self.reminderData,
                                      reminder: reminder)
                     }
+                    
+                    
                     .onDelete(perform: reminderData.deleteReminder)
                 }
                 .navigationBarTitle("Reminders")
@@ -397,7 +426,28 @@ struct ContentView: View {
                 // Load reminders when the ContentView appears
                 self.reminderData.loadReminders()
                 self.reminderData.startCountdowns()
+                
+                os_log("onAppear")
+                
+                // You can act on appState.selectedReminderID here if needed
+                if let id = appState.selectedReminderID {
+                    self.expandedReminderID = id
+                    print("Setting expandedReminderID in ContentView:", id)  // Log the value here
+                } else {
+                    print("expandedReminderID is not being set in ContentView")
+                }
             }
+            .onChange(of: appState.selectedReminderID) { newValue in
+                os_log("onChang")
+                
+                if let id = newValue {
+                    self.expandedReminderID = id
+                    print("Setting expandedReminderID in ContentView due to AppState change:", id)
+                } else {
+                    print("expandedReminderID is not being set due to AppState change")
+                }
+            }
+            
         }
     }
 }
@@ -602,7 +652,7 @@ struct ModalView: View {
                                     repeatUnit: selectedRepeatOption,
                                     repeatDays: isRepeatDaysOn ? selectedRepeatDays : [],
                                     active: true,
-                                    tasks: []
+                                    tasks: tasks
                                 ) // Customize with user input
                                 reminderData.reminders.append(newReminder)
                                 reminderData.startCountdowns(for: newReminder )
