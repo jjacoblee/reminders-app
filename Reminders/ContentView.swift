@@ -388,9 +388,25 @@ struct ModalView: View {
                 VStack {
                     VStack(spacing: 20) {
                         // Name
-                        TextField("Name", text: $name)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                        
+                        HStack {
+                            TextField("Name", text: $name)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.trailing, name.isEmpty ? 0 : 25) // Space for the X button
+                            
+                            if !name.isEmpty {
+                                Button(action: {
+                                    name = ""
+                                }) {
+                                    Image(systemName: "multiply.circle.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .foregroundColor(Color.gray)
+                                        .padding(.trailing, 10)
+                                }
+                            }
+                        }
+
                         
                         // Start Date and Time
                         DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
