@@ -150,7 +150,6 @@ class ReminderData: ObservableObject {
     
     func startCountdowns(for reminder: Reminder? = nil) {
         let calendar = Calendar.current
-
         let remindersToProcess = reminder != nil ? [reminder!] : reminders
 
         for reminder in remindersToProcess where reminder.active && timers[reminder.id] == nil {
@@ -162,18 +161,20 @@ class ReminderData: ObservableObject {
 
             let current = Date()
             let start = combineDateAndTime(date: Date(), time: reminder.startTime)
+            
             if let end = reminder.endTime, current > end {
                 continue
             }
-            if current < start {
-                continue
-            }
-
+            
             let repeatInSeconds = convertRepeatToSeconds(repeatEvery: reminder.repeatEvery, repeatUnit: reminder.repeatUnit)
+            
+            // Calculate the initial countdown based on the startTime
+            let timeUntilStart = start.timeIntervalSince(current)
+            let countdownValue = max(0, timeUntilStart)
 
             // Initialize the countdown value when starting the timer
             if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
-                reminders[index].countdown = repeatInSeconds
+                reminders[index].countdown = countdownValue > 0 ? countdownValue : repeatInSeconds
             }
 
             timers[reminder.id] = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
