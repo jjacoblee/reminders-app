@@ -11,7 +11,7 @@ struct TimeConstants {
 
 enum DayOfWeek: Int, CaseIterable, Identifiable, Codable {
     case Sun = 1, Mon, Tue, Wed, Thu, Fri, Sat
-
+    
     var id: Int { self.rawValue }
     
     var shortName: String {
@@ -31,7 +31,7 @@ enum DayOfWeek: Int, CaseIterable, Identifiable, Codable {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
-
+    
     // Custom decoder
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -130,7 +130,7 @@ class ReminderData: ObservableObject {
             }
         }
     }
-
+    
     func requestNotificationPermission(completion: @escaping () -> Void) {
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, error in
@@ -147,25 +147,25 @@ class ReminderData: ObservableObject {
             }
         }
     }
-
+    
     func completeReminderSave() {
         if let encoded = try? JSONEncoder().encode(reminders) {
             UserDefaults.standard.set(encoded, forKey: "reminders")
         }
     }
-
+    
     
     func startCountdowns(for reminder: Reminder? = nil) {
         let calendar = Calendar.current
         let remindersToProcess = reminder != nil ? [reminder!] : reminders
-
+        
         for reminder in remindersToProcess where reminder.active && timers[reminder.id] == nil {
             let dayOfWeek = calendar.component(.weekday, from: Date()) // 1 = Sunday, 7 = Saturday
-
+            
             if !reminder.repeatDays.isEmpty && !reminder.repeatDays.contains(where: { $0.rawValue == dayOfWeek }) {
                 continue
             }
-
+            
             let current = Date()
             let start = combineDateAndTime(date: Date(), time: reminder.startTime)
             
@@ -178,28 +178,28 @@ class ReminderData: ObservableObject {
             // Calculate the initial countdown based on the startTime
             let timeUntilStart = start.timeIntervalSince(current)
             let countdownValue = max(0, timeUntilStart)
-
+            
             // Initialize the countdown value when starting the timer
             if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
                 reminders[index].countdown = countdownValue > 0 ? countdownValue : repeatInSeconds
             }
-
+            
             timers[reminder.id] = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
-
+                
                 if let index = self.reminders.firstIndex(where: { $0.id == reminder.id }) {
                     // Reduce the countdown
                     var updatedReminder = self.reminders[index]
                     updatedReminder.countdown -= 1.0
-
+                    
                     if updatedReminder.countdown <= 0 {
                         self.scheduleNotification(for: reminder)
                         updatedReminder.countdown = repeatInSeconds
-
+                        
                     }
-
+                    
                     self.reminders[index] = updatedReminder
-
+                    
                     if let end = reminder.endTime, Date() > end {
                         self.timers[reminder.id]?.invalidate()
                         self.timers.removeValue(forKey: reminder.id)
@@ -208,8 +208,8 @@ class ReminderData: ObservableObject {
             }
         }
     }
-
-
+    
+    
     
     func stopCountdowns() {
         for timer in timers.values {
@@ -223,11 +223,11 @@ class ReminderData: ObservableObject {
         content.title = "Reminder Alert!"
         content.body = reminder.title
         content.sound = .default
-
+        
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-
+        
         let request = UNNotificationRequest(identifier: reminder.id.uuidString, content: content, trigger: trigger)
-
+        
         let center = UNUserNotificationCenter.current()
         center.add(request) { error in
             if let error = error {
@@ -237,7 +237,7 @@ class ReminderData: ObservableObject {
             }
         }
     }
-
+    
     
     private func combineDateAndTime(date: Date, time: Date) -> Date {
         let calendar = Calendar.current
@@ -271,12 +271,14 @@ extension TimeInterval {
 }
 
 
+// ReminderView
 struct ReminderView: View {
     @Binding var selectedReminder: Reminder?
+    @Binding var isModalPresented: Bool  // Add this line
     @ObservedObject var reminderData: ReminderData
     var reminder: Reminder
     @State private var areTasksVisible = false
-
+    
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
@@ -288,22 +290,21 @@ struct ReminderView: View {
                         .font(.title2) // Increase font size to make it more pronounced
                         .padding(.trailing, 8) // Add spacing to the right
                 }
-
+                
                 Text(reminder.title)
-                    .contentShape(Rectangle())
                     .onTapGesture {
-                        selectedReminder = reminder
+                        self.selectedReminder = reminder
+                        self.isModalPresented = true
                     }
-
                 Spacer()
-
+                
                 // Countdown Text
                 Text(reminder.countdown.formattedCountdown())
                     .foregroundColor(.gray)
                     .font(.callout)
-
+                
                 Spacer()
-
+                
                 Toggle("", isOn: Binding(
                     get: { reminder.active },
                     set: { newValue in
@@ -321,7 +322,7 @@ struct ReminderView: View {
                 .labelsHidden()
                 .contentShape(Rectangle())
             }
-
+            
             if areTasksVisible {
                 ForEach(reminder.tasks) { task in
                     HStack {
@@ -344,15 +345,15 @@ struct ContentView: View {
     
     @State private var isModalPresented = false
     @State private var selectedReminder: Reminder? = nil
-
+    
     @ObservedObject private var reminderData = ReminderData() // Use the ReminderData object
-
+    
     init(isModalPresented: Bool = false, selectedReminder: Reminder? = nil, reminderData: ReminderData = ReminderData()) {
         self.isModalPresented = isModalPresented
         self.selectedReminder = selectedReminder
         self.reminderData = reminderData
         
-       
+        
     }
     
     var body: some View {
@@ -361,7 +362,10 @@ struct ContentView: View {
                 
                 List {
                     ForEach(reminderData.reminders) { reminder in
-                        ReminderView(selectedReminder: self.$selectedReminder, reminderData: self.reminderData, reminder: reminder)
+                        ReminderView(selectedReminder: self.$selectedReminder,
+                                     isModalPresented: self.$isModalPresented,  // Pass the Binding to ReminderView
+                                     reminderData: self.reminderData,
+                                     reminder: reminder)
                     }
                     .onDelete(perform: reminderData.deleteReminder)
                 }
@@ -371,7 +375,7 @@ struct ContentView: View {
                 }) {
                     ModalView(isModalPresented: self.$isModalPresented, reminderData: self.reminderData, reminderToEdit: self.selectedReminder)
                 }
-
+                
                 
                 Button(action: {
                     // Show the modal when the button is tapped
@@ -397,7 +401,7 @@ struct ContentView: View {
         }
     }
 }
-    
+
 struct ModalView: View {
     
     @Binding var isModalPresented: Bool
@@ -418,6 +422,7 @@ struct ModalView: View {
     @State private var taskName = ""
     @State private var tasks: [Task] = []
     
+    
     let repeatOptions = RepeatUnit.allCases
     let abbreviatedDaysOfWeek = DayOfWeek.allCases
     
@@ -430,29 +435,36 @@ struct ModalView: View {
                 VStack {
                     VStack(spacing: 20) {
                         // Name
-                        HStack {
-                            TextField("Name", text: $name)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.trailing, name.isEmpty ? 0 : 25) // Space for the X button
+                        VStack(alignment: .leading) {
+                            Text("Event Name:")
+                                .font(.body)
+                                .foregroundColor(.primary)
                             
-                            if !name.isEmpty {
-                                Button(action: {
-                                    name = ""
-                                }) {
-                                    Image(systemName: "multiply.circle.fill")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 20, height: 20)
-                                        .foregroundColor(Color.gray)
-                                        .padding(.trailing, 10)
+                            HStack {
+                                TextField("Name", text: $name)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .padding(.trailing, name.isEmpty ? 0 : 25) // Space for the X button
+                                
+                                if !name.isEmpty {
+                                    Button(action: {
+                                        name = ""
+                                    }) {
+                                        Image(systemName: "multiply.circle.fill")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 20, height: 20)
+                                            .foregroundColor(Color.gray)
+                                            .padding(.trailing, 10)
+                                    }
                                 }
                             }
                         }
-
+                        
+                        
                         
                         // Start Date and Time
                         DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
-
+                        
                         // End Date and Time
                         Toggle("End Time", isOn: $isEndTimeEnabled)
                         if isEndTimeEnabled {
@@ -463,9 +475,9 @@ struct ModalView: View {
                                         endTime = startTime.addingTimeInterval(60)
                                     }
                                 }
-
+                            
                         }
-
+                        
                         
                         // Repeat Cadence
                         VStack(spacing: 10) {
@@ -481,7 +493,7 @@ struct ModalView: View {
                                 
                                 Spacer()  // Pushes the views to the left side of the screen
                             }
-
+                            
                             Picker("Unit", selection: $selectedRepeatOption) {
                                 ForEach(repeatOptions, id: \.self) { option in
                                     Text(option.rawValue)
@@ -492,7 +504,7 @@ struct ModalView: View {
                         
                         // Repeat Days
                         Toggle("Repeat Days", isOn: $isRepeatDaysOn)
-
+                        
                         if isRepeatDaysOn {
                             VStack {
                                 List {
@@ -517,8 +529,12 @@ struct ModalView: View {
                             }.frame(minHeight: 380)
                         }
                         
-                        // Task List
-                        VStack {
+                        //Task List
+                        VStack(alignment: .leading) {
+                            Text("Task List")
+                                .font(.body)
+                                .padding(.bottom, 5)
+                            
                             HStack {
                                 TextField("Add task", text: $taskName)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -532,18 +548,37 @@ struct ModalView: View {
                                         .foregroundColor(.blue)
                                 }
                             }
-
-                            List {
+                            
+                            ScrollView {
                                 ForEach(tasks) { task in
-                                    Text(task.name)
+                                    HStack {
+                                        Text(task.name)
+                                        Spacer()
+                                        Image(systemName: "pencil")
+                                            .onTapGesture {
+                                                taskName = task.name
+                                                if let taskIndex = tasks.firstIndex(where: { $0.id == task.id }) {
+                                                    tasks.remove(at: taskIndex)
+                                                }
+                                            }
+                                        Image(systemName: "trash")
+                                            .onTapGesture {
+                                                if let taskIndex = tasks.firstIndex(where: { $0.id == task.id }) {
+                                                    tasks.remove(at: taskIndex)
+                                                }
+                                            }
+                                    }
+                                    .padding()
+                                    .background(Color.gray.opacity(0.1))
+                                    .cornerRadius(8)
+                                    .padding(.horizontal)
                                 }
-                                .onDelete(perform: { indexSet in
-                                    tasks.remove(atOffsets: indexSet)
-                                })
                             }
+                            
                         }
                         
-           
+                        
+                        
                         Button(action: {
                             // Check if we are editing an existing reminder
                             if let reminder = reminderToEdit {
@@ -555,6 +590,7 @@ struct ModalView: View {
                                     reminderData.reminders[index].repeatEvery =  repeatEvery
                                     reminderData.reminders[index].repeatUnit = selectedRepeatOption
                                     reminderData.reminders[index].repeatDays = isRepeatDaysOn ? selectedRepeatDays : []
+                                    reminderData.reminders[index].tasks = tasks
                                 }
                             } else {
                                 // Save the reminder as a new entry
@@ -565,14 +601,15 @@ struct ModalView: View {
                                     repeatEvery:  repeatEvery,
                                     repeatUnit: selectedRepeatOption,
                                     repeatDays: isRepeatDaysOn ? selectedRepeatDays : [],
-                                    active: true
+                                    active: true,
+                                    tasks: []
                                 ) // Customize with user input
                                 reminderData.reminders.append(newReminder)
                                 reminderData.startCountdowns(for: newReminder )
                             }
                             reminderData.saveReminders()
                             
-
+                            
                             // Dismiss the modal
                             self.isModalPresented.toggle()
                         }) {
@@ -582,7 +619,7 @@ struct ModalView: View {
                                 .background(Color.blue)
                                 .cornerRadius(10)
                         }
-
+                        
                     }
                     .padding()
                 }
@@ -607,18 +644,19 @@ struct ModalView: View {
                     self.selectedRepeatDays = reminder.repeatDays
                     self.isRepeatDaysOn = reminder.repeatDays.count > 0
                     self.isEndTimeEnabled = reminder.endTime != nil ? true : false
+                    self.tasks = reminder.tasks
                 }
             }
         }
     }
 }
-    
-    
+
+
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
     }
 }
-    
-    
-    
+
+
+
