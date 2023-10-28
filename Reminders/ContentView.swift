@@ -70,6 +70,12 @@ enum RepeatUnit: String, CaseIterable, Identifiable, Codable {
     
 }
 
+struct Task: Identifiable, Codable {
+    var id = UUID()
+    var name: String
+    var isCompleted: Bool
+}
+
 struct Reminder: Identifiable, Codable { // Make Reminder Codable
     var id = UUID()
     var title: String
@@ -79,6 +85,7 @@ struct Reminder: Identifiable, Codable { // Make Reminder Codable
     var repeatUnit: RepeatUnit
     var repeatDays: [DayOfWeek]
     var active: Bool
+    var tasks: [Task] = []
     
     var countdown: TimeInterval = 0
 }
@@ -264,6 +271,75 @@ extension TimeInterval {
 }
 
 
+struct ReminderView: View {
+    @Binding var selectedReminder: Reminder?
+    @ObservedObject var reminderData: ReminderData
+    var reminder: Reminder
+    @State private var areTasksVisible = false
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                // Chevron Button
+                Button(action: {
+                    areTasksVisible.toggle()
+                }) {
+                    Image(systemName: areTasksVisible ? "chevron.down" : "chevron.right")
+                        .font(.title2) // Increase font size to make it more pronounced
+                        .padding(.trailing, 8) // Add spacing to the right
+                }
+
+                Text(reminder.title)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedReminder = reminder
+                    }
+
+                Spacer()
+
+                // Countdown Text
+                Text(reminder.countdown.formattedCountdown())
+                    .foregroundColor(.gray)
+                    .font(.callout)
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { reminder.active },
+                    set: { newValue in
+                        if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                            reminderData.reminders[index].active = newValue
+                            if newValue {
+                                self.reminderData.startCountdowns()
+                            }
+                            else {
+                                self.reminderData.stopCountdowns()
+                            }
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .contentShape(Rectangle())
+            }
+
+            if areTasksVisible {
+                ForEach(reminder.tasks) { task in
+                    HStack {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .onTapGesture {
+                                // Toggle task completion logic
+                                // Note: This might require moving tasks from the Reminder model to an @State or @Binding property for mutability
+                            }
+                        Text(task.name)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
 struct ContentView: View {
     
     @State private var isModalPresented = false
@@ -285,46 +361,10 @@ struct ContentView: View {
                 
                 List {
                     ForEach(reminderData.reminders) { reminder in
-                        HStack {
-                            Text(reminder.title)
-                                .contentShape(Rectangle()) // Ensure tap only recognized on text
-                                .onTapGesture {
-                                    selectedReminder = reminder
-                                    isModalPresented.toggle()
-                                }
-                            Spacer()
-                            
-                            // Countdown Text
-                            Text(reminder.countdown.formattedCountdown())
-                                .foregroundColor(.gray) // or any other color you prefer
-                                .font(.callout)         // or any other font style you prefer
-                            
-                            Spacer() // Add additional spacing if you want more gap between countdown and toggle
-                            
-                            Toggle("", isOn: Binding(
-                                get: { reminder.active },
-                                set: { newValue in
-                                    // Update the active status of the reminder
-                                    if let index = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
-                                        reminderData.reminders[index].active = newValue
-                                        if newValue {
-                                            self.reminderData.startCountdowns()
-                                        }
-                                        else{
-                                            self.reminderData.stopCountdowns()
-                                        }
-                                    }
-                                }
-                            ))
-                            .labelsHidden() // Hide the label of the toggle
-                            .contentShape(Rectangle()) // Ensure tap only recognized on toggle
-                        }
+                        ReminderView(selectedReminder: self.$selectedReminder, reminderData: self.reminderData, reminder: reminder)
                     }
-                    .onDelete(perform: reminderData.deleteReminder) // Adding the swipe to delete functionality
+                    .onDelete(perform: reminderData.deleteReminder)
                 }
-
-                
-                
                 .navigationBarTitle("Reminders")
                 .sheet(isPresented: $isModalPresented, onDismiss: {
                     selectedReminder = nil // Reset the selected reminder when the modal is dismissed
@@ -375,6 +415,8 @@ struct ModalView: View {
     @State private var selectedRepeatDays: [DayOfWeek] = []
     @State private var isEndTimeEnabled = false
     @State private var repeatEvery = "1"
+    @State private var taskName = ""
+    @State private var tasks: [Task] = []
     
     let repeatOptions = RepeatUnit.allCases
     let abbreviatedDaysOfWeek = DayOfWeek.allCases
@@ -473,6 +515,32 @@ struct ModalView: View {
                                 }
                                 .background(Color(.systemBackground)) // Add a background color
                             }.frame(minHeight: 380)
+                        }
+                        
+                        // Task List
+                        VStack {
+                            HStack {
+                                TextField("Add task", text: $taskName)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                
+                                Button(action: {
+                                    let newTask = Task(name: taskName, isCompleted: false)
+                                    tasks.append(newTask)
+                                    taskName = ""
+                                }) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+
+                            List {
+                                ForEach(tasks) { task in
+                                    Text(task.name)
+                                }
+                                .onDelete(perform: { indexSet in
+                                    tasks.remove(atOffsets: indexSet)
+                                })
+                            }
                         }
                         
            
