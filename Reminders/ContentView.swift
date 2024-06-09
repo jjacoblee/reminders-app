@@ -111,49 +111,80 @@ class ReminderData: ObservableObject {
         saveReminders()
     }
     
+//    func saveReminders() {
+//        let center = UNUserNotificationCenter.current()
+//        
+//        center.getNotificationSettings { settings in
+//            switch settings.authorizationStatus {
+//            case .notDetermined:
+//                self.requestNotificationPermission(completion: {
+//                    // Continue setting the reminder after permission is requested
+//                    self.completeReminderSave()
+//                })
+//            case .authorized, .provisional:
+//                // Permission was already granted. Continue setting the reminder.
+//                self.completeReminderSave()
+//            default:
+//                // Permission denied or restricted. Handle accordingly.
+//                print("Notification permission denied or restricted.")
+//            }
+//        }
+//    }
+    
+    //
+    //    func completeReminderSave() {
+    //        if let encoded = try? JSONEncoder().encode(reminders) {
+    //            UserDefaults.standard.set(encoded, forKey: "reminders")
+    //        }
+    //    }
+    
     func saveReminders() {
         let center = UNUserNotificationCenter.current()
         
         center.getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .notDetermined:
-                self.requestNotificationPermission(completion: {
-                    // Continue setting the reminder after permission is requested
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .notDetermined:
+                    self.requestNotificationPermission(completion: {
+                        // Continue setting the reminder after permission is requested
+                        self.completeReminderSave()
+                    })
+                case .authorized, .provisional:
+                    // Permission was already granted. Continue setting the reminder.
                     self.completeReminderSave()
-                })
-            case .authorized, .provisional:
-                // Permission was already granted. Continue setting the reminder.
-                self.completeReminderSave()
-            default:
-                // Permission denied or restricted. Handle accordingly.
-                print("Notification permission denied or restricted.")
+                default:
+                    // Permission denied or restricted. Handle accordingly.
+                    print("Notification permission denied or restricted.")
+                }
             }
+        }
+    }
+
+    private func completeReminderSave() {
+        if let encoded = try? JSONEncoder().encode(reminders) {
+            UserDefaults.standard.set(encoded, forKey: "reminders")
+            print("Reminders saved")
+        } else {
+            print("Failed to save reminders")
         }
     }
     
     func requestNotificationPermission(completion: @escaping () -> Void) {
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if granted {
-                print("Notification permission granted!")
-                DispatchQueue.main.async {
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            DispatchQueue.main.async {
+                if granted {
+                    print("Notification permission granted!")
                     completion()
-                }
-            } else {
-                print("Notification permission denied.")
-                if let error = error {
-                    print("Error: \(error)")
+                } else {
+                    print("Notification permission denied.")
+                    if let error = error {
+                        print("Error: \(error)")
+                    }
                 }
             }
         }
     }
-    
-    func completeReminderSave() {
-        if let encoded = try? JSONEncoder().encode(reminders) {
-            UserDefaults.standard.set(encoded, forKey: "reminders")
-        }
-    }
-    
     
     func startCountdowns(for reminder: Reminder? = nil) {
         let calendar = Calendar.current
@@ -181,35 +212,37 @@ class ReminderData: ObservableObject {
             
             // Initialize the countdown value when starting the timer
             if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
-                reminders[index].countdown = countdownValue > 0 ? countdownValue : repeatInSeconds
+                DispatchQueue.main.async {
+                    self.reminders[index].countdown = countdownValue > 0 ? countdownValue : repeatInSeconds
+                }
             }
             
             timers[reminder.id] = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 
-                if let index = self.reminders.firstIndex(where: { $0.id == reminder.id }) {
-                    // Reduce the countdown
-                    var updatedReminder = self.reminders[index]
-                    updatedReminder.countdown -= 1.0
-                    
-                    if updatedReminder.countdown <= 0 {
-                        self.scheduleNotification(for: reminder)
-                        updatedReminder.countdown = repeatInSeconds
+                DispatchQueue.main.async {
+                    if let index = self.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                        // Reduce the countdown
+                        var updatedReminder = self.reminders[index]
+                        updatedReminder.countdown -= 1.0
                         
-                    }
-                    
-                    self.reminders[index] = updatedReminder
-                    
-                    if let end = reminder.endTime, Date() > end {
-                        self.timers[reminder.id]?.invalidate()
-                        self.timers.removeValue(forKey: reminder.id)
+                        if updatedReminder.countdown <= 0 {
+                            self.scheduleNotification(for: reminder)
+                            updatedReminder.countdown = repeatInSeconds
+                            
+                        }
+                        
+                        self.reminders[index] = updatedReminder
+                        
+                        if let end = reminder.endTime, Date() > end {
+                            self.timers[reminder.id]?.invalidate()
+                            self.timers.removeValue(forKey: reminder.id)
+                        }
                     }
                 }
             }
         }
     }
-    
-    
     
     func stopCountdowns() {
         for timer in timers.values {
@@ -234,10 +267,35 @@ class ReminderData: ObservableObject {
                 print("Error scheduling notification: \(error)")
             } else {
                 print("Notification scheduled!")
+                // Reset tasks after scheduling the notification
+                DispatchQueue.main.async {
+                    self.resetTasks(for: reminder)
+                }
+                
+                // Verify the scheduled notifications
+                center.getPendingNotificationRequests { requests in
+                    for request in requests {
+                        print("Pending notification: \(request.identifier)")
+                    }
+                }
             }
         }
     }
     
+    func resetTasks(for reminder: Reminder) {
+        if let index = reminders.firstIndex(where: { $0.id == reminder.id }) {
+            reminders[index].tasks = reminders[index].tasks.map { task in
+                var updatedTask = task
+                updatedTask.isCompleted = false
+                print("Resetting task: \(updatedTask.name)")
+                return updatedTask
+            }
+            print("Tasks reset for reminder: \(reminder.title)")
+            saveReminders() // Save changes after resetting tasks
+        } else {
+            print("Reminder not found for resetting tasks")
+        }
+    }
     
     private func combineDateAndTime(date: Date, time: Date) -> Date {
         let calendar = Calendar.current
@@ -249,9 +307,7 @@ class ReminderData: ObservableObject {
         guard let value = Int(repeatEvery) else { return 0 }
         return TimeInterval(value) * repeatUnit.seconds
     }
-    
 }
-
 extension TimeInterval {
     func formattedCountdown() -> String {
         let weeks = Int(self) / (3600 * 24 * 7)
@@ -274,21 +330,29 @@ extension TimeInterval {
 // ReminderView
 struct ReminderView: View {
     @Binding var selectedReminder: Reminder?
-    @Binding var isModalPresented: Bool  // Add this line
+    @Binding var isModalPresented: Bool
     @ObservedObject var reminderData: ReminderData
     var reminder: Reminder
     @State private var areTasksVisible = false
+    @State private var tasks: [Task]
+
+    init(selectedReminder: Binding<Reminder?>, isModalPresented: Binding<Bool>, reminderData: ReminderData, reminder: Reminder) {
+        self._selectedReminder = selectedReminder
+        self._isModalPresented = isModalPresented
+        self.reminderData = reminderData
+        self.reminder = reminder
+        self._tasks = State(initialValue: reminder.tasks)
+    }
     
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
-                // Chevron Button
                 Button(action: {
                     areTasksVisible.toggle()
                 }) {
                     Image(systemName: areTasksVisible ? "chevron.down" : "chevron.right")
-                        .font(.title2) // Increase font size to make it more pronounced
-                        .padding(.trailing, 8) // Add spacing to the right
+                        .font(.title2)
+                        .padding(.trailing, 8)
                 }
                 
                 Text(reminder.title)
@@ -298,7 +362,6 @@ struct ReminderView: View {
                     }
                 Spacer()
                 
-                // Countdown Text
                 Text(reminder.countdown.formattedCountdown())
                     .foregroundColor(.gray)
                     .font(.callout)
@@ -312,8 +375,7 @@ struct ReminderView: View {
                             reminderData.reminders[index].active = newValue
                             if newValue {
                                 self.reminderData.startCountdowns()
-                            }
-                            else {
+                            } else {
                                 self.reminderData.stopCountdowns()
                             }
                         }
@@ -324,16 +386,27 @@ struct ReminderView: View {
             }
             
             if areTasksVisible {
-                ForEach(reminder.tasks) { task in
+                ForEach(tasks) { task in
                     HStack {
                         Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                             .onTapGesture {
-                                // Toggle task completion logic
-                                // Note: This might require moving tasks from the Reminder model to an @State or @Binding property for mutability
+                                toggleTaskCompletion(task)
                             }
                         Text(task.name)
                     }
                 }
+            }
+        }
+        .onAppear {
+            self.tasks = reminder.tasks
+        }
+    }
+    
+    private func toggleTaskCompletion(_ task: Task) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index].isCompleted.toggle()
+            if let reminderIndex = reminderData.reminders.firstIndex(where: { $0.id == reminder.id }) {
+                reminderData.reminders[reminderIndex].tasks = tasks
             }
         }
     }
@@ -602,7 +675,7 @@ struct ModalView: View {
                                     repeatUnit: selectedRepeatOption,
                                     repeatDays: isRepeatDaysOn ? selectedRepeatDays : [],
                                     active: true,
-                                    tasks: []
+                                    tasks: tasks
                                 ) // Customize with user input
                                 reminderData.reminders.append(newReminder)
                                 reminderData.startCountdowns(for: newReminder )
